@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>생성형 AI에게 데이터를 "제대로" 시키는 법</title>
+<meta property="og:title" content="생성형 AI에게 데이터를 제대로 시키는 법">
+<meta property="og:description" content="논문 더미 → 메타분석용 구조화 데이터 추출 프롬프트 설계 가이드">
+<meta property="og:image" content="assets/thumbnail.png">
+<style>
+  :root{
+    --bg0:#0F2027; --bg1:#203A43; --bg2:#2C5364;
+    --teal:#4ECDC4; --gold:#FFDC82; --ink:#eaf2f4; --muted:#9fb3ba;
+    --card:#16323c; --line:#2f5360;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:"Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;
+    color:var(--ink); line-height:1.65;
+    background:linear-gradient(160deg,var(--bg0),var(--bg1) 45%,var(--bg2));
+    background-attachment:fixed;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  section{padding:64px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+  h2{font-size:clamp(26px,4vw,38px);margin-bottom:6px;letter-spacing:-.5px}
+  h2 .em{color:var(--teal)}
+  .lead{color:var(--muted);font-size:18px;margin-bottom:34px}
+  .tag{display:inline-block;font-size:13px;font-weight:700;color:var(--teal);
+       letter-spacing:2px;text-transform:uppercase;margin-bottom:10px}
+
+  /* HERO */
+  .hero{text-align:center;padding:88px 0 60px}
+  .hero .accent{height:6px;width:120px;margin:0 auto 28px;border-radius:6px;background:var(--teal)}
+  .hero h1{font-size:clamp(34px,6.4vw,68px);line-height:1.15;letter-spacing:-1px}
+  .hero h1 .em{color:var(--teal)}
+  .hero p{color:var(--muted);font-size:clamp(15px,2.4vw,21px);margin-top:18px}
+  .btns{margin-top:34px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .btn{padding:12px 22px;border-radius:30px;font-weight:700;text-decoration:none;font-size:15px;
+       border:2px solid var(--teal);color:var(--teal);transition:.2s}
+  .btn:hover{background:var(--teal);color:var(--bg0)}
+  .btn.solid{background:var(--teal);color:var(--bg0)}
+  .btn.solid:hover{filter:brightness(1.12)}
+
+  /* FLOW diagram */
+  .flow{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;margin:46px 0 8px}
+  .node{background:var(--card);border:2px solid var(--line);border-radius:18px;
+        padding:20px 24px;min-width:150px;text-align:center}
+  .node.hi{border-color:var(--teal);box-shadow:0 0 0 4px rgba(78,205,196,.12)}
+  .node b{display:block;font-size:21px}
+  .node small{color:var(--muted);font-size:13px}
+  .node .j{color:var(--gold)}
+  .arrow{color:var(--teal);font-size:30px;font-weight:700;padding:0 4px}
+
+  /* generic cards grid */
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px}
+  .card h3{font-size:18px;margin-bottom:6px}
+  .card .ico{font-size:30px;display:block;margin-bottom:8px}
+  .card p{color:var(--muted);font-size:15px}
+  .card .map{color:var(--teal);font-weight:700;font-size:13px;margin-top:10px}
+
+  /* problem strip */
+  .strip{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:8px}
+  .out{background:#3a1f24;border:1px solid #6e3a42;border-radius:14px;padding:16px;font-size:14px}
+  .out b{color:#ff9aa6}
+  .badbar{background:#2a1418;border-left:4px solid #ff6b78;padding:14px 16px;border-radius:8px;
+          margin-top:18px;color:#ffd0d5;font-size:15px}
+
+  /* mission table */
+  table{width:100%;border-collapse:collapse;margin-top:10px;background:var(--card);
+        border-radius:14px;overflow:hidden}
+  th,td{padding:14px 16px;text-align:center;border:1px solid var(--line)}
+  th{background:#0f2730;color:var(--teal)}
+  td.lab{background:#0f2730;color:var(--teal);font-weight:700}
+
+  /* stepper */
+  .steps{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:8px}
+  .step{display:flex;gap:14px;background:var(--card);border:1px solid var(--line);
+        border-radius:14px;padding:16px}
+  .step .n{flex:0 0 42px;height:42px;border-radius:11px;background:var(--teal);color:var(--bg0);
+           font-weight:800;display:grid;place-items:center;font-size:18px}
+  .step h4{font-size:16px}
+  .step p{color:var(--muted);font-size:14px}
+
+  /* transform cards (before/after) */
+  .tcard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;
+         border-top:4px solid var(--teal)}
+  .tcard h3{font-size:19px;margin-bottom:4px}
+  .tcard .sub{color:var(--muted);font-size:14px;margin-bottom:14px}
+  .ba{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+      background:#0f2730;border-radius:12px;padding:14px;font-family:ui-monospace,Consolas,monospace}
+  .ba .box{padding:8px 12px;border-radius:8px;background:#16323c;border:1px solid var(--line);font-size:15px}
+  .ba .to{color:var(--teal);font-weight:800;font-size:20px}
+  .ba .res{color:var(--gold);font-weight:700}
+  .note{font-size:14px;color:var(--muted);margin-top:12px}
+  .note b{color:var(--ink)}
+
+  /* pipeline */
+  .pipe{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .pcol{flex:1;min-width:180px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .pcol .h{font-weight:800;color:var(--teal);margin-bottom:8px}
+  .pcol .v{font-family:ui-monospace,Consolas,monospace;font-size:22px;font-weight:700}
+  .pcol small{color:var(--muted)}
+
+  /* pitfalls */
+  .pit{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:8px}
+  .pit div{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--gold);
+           border-radius:10px;padding:12px 14px;font-size:14px}
+  .pit b{color:var(--gold)}
+
+  /* lessons */
+  ol.lessons{counter-reset:l;list-style:none;display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:8px}
+  ol.lessons li{counter-increment:l;position:relative;background:var(--card);border:1px solid var(--line);
+                border-radius:12px;padding:14px 16px 14px 56px;font-size:15px}
+  ol.lessons li::before{content:counter(l);position:absolute;left:14px;top:12px;width:30px;height:30px;
+                border-radius:8px;background:var(--teal);color:var(--bg0);font-weight:800;display:grid;place-items:center}
+
+  .callout{background:linear-gradient(120deg,#11313b,#0f2730);border:1px solid var(--teal);
+           border-radius:16px;padding:24px;text-align:center;font-size:clamp(17px,2.6vw,22px);margin-top:24px}
+  .callout b{color:var(--teal)}
+
+  footer{padding:48px 0;text-align:center;color:var(--muted);font-size:14px}
+  footer a{color:var(--teal);text-decoration:none}
+
+  @media(max-width:740px){
+    .g3,.g2,.steps,.pit,ol.lessons,.strip{grid-template-columns:1fr}
+    .flow{flex-direction:column}.arrow{transform:rotate(90deg)}
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="wrap">
+    <div class="accent"></div>
+    <h1>생성형 AI에게<br><span class="em">데이터를 "제대로" 시키는 법</span></h1>
+    <p>논문 더미 → 메타분석용 구조화 데이터 추출 프롬프트 설계 가이드</p>
+
+    <div class="flow">
+      <div class="node"><b>📄 논문 PDF</b><small>제각각 형식</small></div>
+      <div class="arrow">→</div>
+      <div class="node hi"><b>🤖 GPT-5</b><small>10단계 프롬프트</small></div>
+      <div class="arrow">→</div>
+      <div class="node"><b class="j">{ JSON }</b><small>통일된 구조</small></div>
+    </div>
+
+    <div class="btns">
+      <a class="btn solid" href="#transform">✨ 5가지 변환 보기</a>
+      <a class="btn" href="https://github.com/sdkparkforbi/genai-meta-analysis-extraction" target="_blank">GitHub 저장소</a>
+    </div>
+  </div>
+</header>
+
+<!-- PROBLEM -->
+<section id="problem"><div class="wrap">
+  <span class="tag">The Problem</span>
+  <h2>"정리 좀 해줘"라고 하면 생기는 일 😱</h2>
+  <p class="lead">같은 논문, 같은 AI인데 실행할 때마다 결과가 다릅니다.</p>
+  <div class="strip">
+    <div class="out"><b>1번째</b> — 표로 정리.<br>사전/사후 구분 ✅</div>
+    <div class="out"><b>2번째</b> — 줄글로 설명.<br>사전/사후 섞임 ❌</div>
+    <div class="out"><b>3번째</b> — "분산"을<br>"표준편차"로 착각 ❌</div>
+  </div>
+  <div class="badbar">💥 메타분석에서 숫자 하나는 효과크기를 바꾸고 결론을 바꿉니다. 왜 들쭉날쭉할까요?
+    <b>AI가 멍청해서가 아니라, "무엇을·어떻게·어떤 모양으로" 달라고 안 했기 때문</b>입니다.</div>
+</div></section>
+
+<!-- ANALOGY -->
+<section id="analogy"><div class="wrap">
+  <span class="tag">The Big Idea</span>
+  <h2>AI는 <span class="em">"오늘 처음 온 똑똑한 인턴"</span>이다 👔</h2>
+  <p class="lead">엄청 똑똑하지만 당신의 연구 맥락은 하나도 모릅니다. 일 잘 시키는 7가지 원칙 =  프롬프트 7원칙.</p>
+  <div class="grid g3">
+    <div class="card"><span class="ico">🎭</span><h3>① 역할을 준다</h3><p>"너는 데이터 정리 담당이야"</p><div class="map">→ Persona 부여</div></div>
+    <div class="card"><span class="ico">🧲</span><h3>② 기준을 준다</h3><p>"이런 것만 가져오고 저런 건 버려"</p><div class="map">→ 선별/제외 규칙</div></div>
+    <div class="card"><span class="ico">📋</span><h3>③ 양식을 준다</h3><p>"이 칸에 맞춰 채워"</p><div class="map">→ 출력 스키마</div></div>
+    <div class="card"><span class="ico">📑</span><h3>④ 참고자료를 준다</h3><p>"모르면 이 표에서 찾아"</p><div class="map">→ 레퍼런스 주입</div></div>
+    <div class="card"><span class="ico">🧮</span><h3>⑤ 공식을 준다</h3><p>"계산은 이대로 해"</p><div class="map">→ 명시적 변환식</div></div>
+    <div class="card"><span class="ico">🪜</span><h3>⑥ 과정을 적게 한다</h3><p>"중간 계산도 남겨둬"</p><div class="map">→ 단계 분해(CoT)</div></div>
+  </div>
+</div></section>
+
+<!-- MISSION -->
+<section id="mission"><div class="wrap">
+  <span class="tag">The Mission</span>
+  <h2>우리가 뽑아야 하는 것 🎯</h2>
+  <p class="lead">딱 이 조합 — 그런데 논문마다 보고 방식이 제각각이라 통일이 필요합니다.</p>
+  <table>
+    <tr><th></th><th>사전 (pre)</th><th>사후 (post)</th></tr>
+    <tr><td class="lab">실험군</td><td>평균 · 표준편차</td><td>평균 · 표준편차</td></tr>
+    <tr><td class="lab">통제군</td><td>평균 · 표준편차</td><td>평균 · 표준편차</td></tr>
+  </table>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><p>📏 1~5 척도 vs 1~7 척도가 섞임</p></div>
+    <div class="card"><p>🔀 "분산" vs "표준편차" 혼용</p></div>
+    <div class="card"><p>➕ 사후 점수 대신 <b>변화량(Δ)</b>만 줌</p></div>
+    <div class="card"><p>↕️ "스트레스↑=나쁨" vs "행복↑=좋음" 혼재</p></div>
+  </div>
+</div></section>
+
+<!-- 10 STEPS -->
+<section id="steps"><div class="wrap">
+  <span class="tag">The Recipe</span>
+  <h2>10단계 프롬프트 한눈에 보기 🔬</h2>
+  <p class="lead">각 단계 = 인턴 교육 한 토막.</p>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><div><h4>논문 기본정보</h4><p>제목·저자·연도 — 워밍업</p></div></div>
+    <div class="step"><div class="n">2</div><div><h4>선별 규칙</h4><p>가져올 것 + <b>버릴 것</b>을 둘 다 명시</p></div></div>
+    <div class="step"><div class="n">3</div><div><h4>계층 구조</h4><p>큰 척도 ⊃ 하위요인을 따로 분리</p></div></div>
+    <div class="step"><div class="n">4</div><div><h4>원본 입수</h4><p>논문 그대로, 손대지 않기</p></div></div>
+    <div class="step"><div class="n">5</div><div><h4>레퍼런스 표</h4><p>커닝페이퍼 주입 → 환각 방지</p></div></div>
+    <div class="step"><div class="n">6</div><div><h4>정제값 칸</h4><p>다듬은 값을 담는 중간 칸</p></div></div>
+    <div class="step"><div class="n">7</div><div><h4>정제 과정</h4><p>Δ복원·분산변환·역채점</p></div></div>
+    <div class="step"><div class="n">8</div><div><h4>최종 산출</h4><p>모두 1~5로 통일</p></div></div>
+    <div class="step"><div class="n">9</div><div><h4>JSON 구조</h4><p>빈 양식 통째로 제공</p></div></div>
+    <div class="step"><div class="n">10</div><div><h4>처리 요약</h4><p>AI 스스로 자기 검증</p></div></div>
+  </div>
+</div></section>
+
+<!-- TRANSFORMATIONS -->
+<section id="transform"><div class="wrap">
+  <span class="tag">The Magic</span>
+  <h2>다섯 가지 <span class="em">"마법 같은"</span> 변환 ✨</h2>
+  <p class="lead">실제 숫자로 따라가 봅시다. 여기가 핵심입니다.</p>
+
+  <div class="grid" style="gap:18px">
+    <div class="tcard">
+      <h3>① Δ복원 — "출발점 + 이동거리 = 도착점" 🏃</h3>
+      <div class="sub">사전 점수 + 변화량(Δ)만 줬을 때 사후를 복원</div>
+      <div class="ba">
+        <span class="box">사전 3.0</span><span class="to">+</span><span class="box">Δ +0.5</span>
+        <span class="to">→</span><span class="box res">사후 3.5</span>
+      </div>
+      <p class="note"><b>SD는 더하면 안 됨!</b> √(0.4² + 0.3²) = √0.25 = <b>0.5</b> · 분산이 더해지니까(피타고라스 📐)</p>
+    </div>
+
+    <div class="tcard">
+      <h3>② 분산 ↔ 표준편차 — "단위 맞추기" 🔁</h3>
+      <div class="sub">논문이 분산을 보고했다면 SD로</div>
+      <div class="ba">
+        <span class="box">분산 0.64</span><span class="to">→ √</span><span class="box res">SD 0.8</span>
+      </div>
+      <p class="note">🚨 분산 0.64를 그냥 SD 0.64로 적으면 효과크기가 완전히 틀어집니다.</p>
+    </div>
+
+    <div class="tcard">
+      <h3>③ 척도 통일 — "달러·유로를 원화로 환전" 💱</h3>
+      <div class="sub">1~7 과 1~5 는 그냥 비교 불가 → 모두 1~5로</div>
+      <div class="ba">
+        <span class="box">1~7 척도 · 5.0</span><span class="to">→</span>
+        <span class="box">1+(5−1)×4/6</span><span class="to">=</span><span class="box res">3.67</span>
+      </div>
+      <p class="note">1~7→1~5: X′=1+(X−1)×4/6 · 0~4→1~5: X′=1+X · 1~4→1~5: X′=1+(X−1)×4/3</p>
+    </div>
+
+    <div class="tcard">
+      <h3>④ 역채점 — "꼴찌 등수를 점수로 뒤집기" 🔄</h3>
+      <div class="sub">"스트레스↑=나쁨"을 "↑=좋음"으로 방향 통일</div>
+      <div class="ba">
+        <span class="box">스트레스 4.0</span><span class="to">→</span>
+        <span class="box">(5+1)−4.0</span><span class="to">=</span><span class="box res">2.0</span>
+      </div>
+      <p class="note"><b>왜?</b> 메타분석은 효과를 합칩니다. 방향이 섞이면 양수·음수가 상쇄돼 엉망 → 모두 "↑=좋음"으로 정렬. SD는 그대로.</p>
+    </div>
+
+    <div class="tcard">
+      <h3>⑤ 상위척도 합성 — "부분 점수로 전체 만들기" 🧩</h3>
+      <div class="sub">하위요인 값으로 상위척도 계산</div>
+      <div class="ba">
+        <span class="box">하위 평균 3·4·5</span><span class="to">→ 평균</span><span class="box res">4.0</span>
+      </div>
+      <div class="ba" style="margin-top:8px">
+        <span class="box">하위 SD 0.5·0.6·0.7</span><span class="to">→</span>
+        <span class="box">√(0.25+0.36+0.49)/3</span><span class="to">=</span><span class="box res">0.35</span>
+      </div>
+      <p class="note">⚠️ <b>핵심 함정</b>: 분산은 <b>평균내는 게 아니라, 더한 뒤 요인수로 나눈다.</b>
+        `(X+Y)/2`의 분산은 (Vx+Vy)/<b>4</b>이지 (Vx+Vy)/2가 아님. (상관 0 가정 — 양의 상관이면 공분산 항 추가)</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- PIPELINE -->
+<section id="pipeline"><div class="wrap">
+  <span class="tag">Show Your Work</span>
+  <h2>원본 → 정제 → 최종: 영수증처럼 다 보여줘 🧾</h2>
+  <p class="lead">모든 숫자를 3번 적게 합니다. 귀찮지만 이게 정확도와 재현성의 비결.</p>
+  <div class="pipe">
+    <div class="pcol"><div class="h">원본</div><div class="v">5.0</div><small>논문 그대로</small></div>
+    <div class="pcol"><div class="h">정제</div><div class="v">5.0</div><small>Δ복원·분산변환 후</small></div>
+    <div class="pcol"><div class="h">최종</div><div class="v" style="color:var(--gold)">3.67</div><small>1~5로 통일 후</small></div>
+  </div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><span class="ico">🔍</span><h3>검산 가능</h3><p>이상하면 어느 단계에서 틀렸는지 역추적</p></div>
+    <div class="card"><span class="ico">🎯</span><h3>정확도 ↑</h3><p>과정을 펼치면(CoT) AI가 덜 틀림</p></div>
+    <div class="card"><span class="ico">♻️</span><h3>재현성</h3><p>남이 봐도 변환 경로를 안다</p></div>
+  </div>
+</div></section>
+
+<!-- PITFALLS -->
+<section id="pitfalls"><div class="wrap">
+  <span class="tag">Watch Out</span>
+  <h2>흔한 함정 모음 😱</h2>
+  <div class="pit">
+    <div><b>분산을 SD로 착각</b> — 효과크기가 과대 → "분산이면 √ 씌워라"</div>
+    <div><b>Δ 부호 반대</b> — 효과 방향 뒤집힘 → "사전-사후/사후-사전 확인"</div>
+    <div><b>역채점 누락</b> — 어떤 척도만 음수 → 부정척도 목록 제공</div>
+    <div><b>척도 안 맞춤</b> — 1~7과 1~5 혼합 → 전부 1~5</div>
+    <div><b>분산을 평균냄</b> — 상위 SD 과대 → √(SD²합)/k</div>
+    <div><b>AI가 문항수 지어냄</b> — 출처불명 → "모르면 공란"</div>
+  </div>
+</div></section>
+
+<!-- LESSONS -->
+<section id="lessons"><div class="wrap">
+  <span class="tag">Takeaways</span>
+  <h2>핵심 교훈 10가지 📌</h2>
+  <ol class="lessons">
+    <li>AI는 똑똑한 인턴이다. 맥락을 모른다고 가정하라.</li>
+    <li>역할을 줘라. "너는 ○○ 전문가다".</li>
+    <li>가져올 것 + 버릴 것을 둘 다 명시하라.</li>
+    <li>출력 양식을 통째로 줘라(빈칸 채우기).</li>
+    <li>"순수 JSON만" — 기계가 먹을 거면 인사말 막아라.</li>
+    <li>공식을 직접 줘라. 즉흥 계산을 믿지 마라.</li>
+    <li>커닝페이퍼를 줘라. "모르면 찾아."</li>
+    <li>과정을 펼치게 하라. 답보다 과정.</li>
+    <li>방향·부호·단위가 가장 자주 틀린다.</li>
+    <li>검증 칸을 만들어 AI가 스스로 점검하게 하라.</li>
+  </ol>
+  <div class="callout">🎓 <b>좋은 프롬프트는 명령이 아니라,<br>똑똑한 신입에게 주는 잘 짜인 업무 매뉴얼이다.</b></div>
+</div></section>
+
+<footer>
+  「생성형 AI–인간 협업 기반 메타분석 절차」 연구 프로젝트 · 디지털 미술치료<br>
+  <a href="https://github.com/sdkparkforbi/genai-meta-analysis-extraction">github.com/sdkparkforbi/genai-meta-analysis-extraction</a>
+  &nbsp;·&nbsp;
+  <a href="prompts/extraction_prompt.md">프롬프트 전문</a>
+  &nbsp;·&nbsp;
+  <a href="examples/worked_example.md">변환 예시</a>
+</footer>
+
+</body>
+</html>
